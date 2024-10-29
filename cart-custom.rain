@@ -1,0 +1,424 @@
+{# cart item ids #}
+{% set cartProductIds = [] %}
+{% set cartProductVids = [] %}
+{% set cartProductQids = [] %}
+
+{% for product in cart.products %}
+  {% set cartProductIds = cartProductIds | merge([product.id]) %}
+  {% set cartProductVids = cartProductVids | merge([product.vid]) %}
+  {% set cartProductQids = cartProductQids | merge([product.qid]) %}
+{% endfor %}
+
+{# loyalty #}
+{% set loyaltyActive = cart.loyalty_reward or request.get.loyalty == 1 or request.get.loyalty_active == 1 %}
+{% set loyaltyEnabled = shop.settings.stats.omni_loyalty.loyalty_id or request.get.loyalty == 1  or request.get.loyalty_enabled == 1 %}
+
+{% if true %}
+<div id="cart-checkout-sticky">
+  <a href="{{ 'checkout' | url }}" class="button button-cta w-100 with-icon">
+    {{ 'Proceed to checkout' | t }} <i class="icon-arrow-right"></i>
+  </a>
+  
+  {% if theme.enable_free_shipping_notice %}
+    {% include 'snippets/freeshipping-bar.rain' with {'type':'text', 'classList':'mt-1 fz-090'} %}
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="container cart-custom mt-4">
+  
+  <h1>{{ 'Cart' | t }}</h1>
+  
+	{% if cart.discount.discount_rules %}
+  <div class="gui-messages mt-3">
+    <ul class="gui-info">
+      {% for rule in cart.discount.discount_rules %}
+      <li>{{ rule.translation }}</li>
+      {% endfor %}
+    </ul>
+  </div>
+  {% endif %}
+  
+  {% if textpage.content %}
+  <div class="mt-3 content">
+    {{ textpage.content | raw }}
+  </div>
+  {% endif %}
+  
+  <div class="row">
+    
+    {% if not cart.products %}
+    <div class="col-md-12 text-center">
+      
+      
+      <div class="no-items">
+        <h3>{{ 'You have no items in your shopping cart' | t }}</h3>
+        <a href="{{ '' | url }}" class="button-txt">{{ 'Continue shopping' | t }}</a>
+      </div>
+      
+    </div>
+    
+      {% if page.recent %}
+        <h2 class="mt-3">{{ 'Recently viewed' | t }}</h2>
+    <div class="row">
+        {% include 'snippets/products.rain' with {'products': page.recent, 'mode': 'grid', 'col_width': '3', 'limit': 4} %}
+    </div>
+      {% endif %}
+    
+    {% else %}
+    <div class="col-lg-8 mt-4">
+      
+    <form class="box-shadow-sm p-0 p-sm-3 p-md-4 br-5" action="{{ '/cart/update' | url }}" method="post" id="cart-form">
+      
+      {% for product in cart.products | reverse %}
+     
+      	{% set totalBasePriceIncl = (product.base.price_incl | round(2) * product.quantity) %}
+      	{% set totalBasePriceExcl = (product.base.price_excl | round(2) * product.quantity) %}
+      	{% set loyaltyTotalBasePrice = (totalBasePriceIncl > product.price.price_incl and loyaltyActive) %}
+      
+        {% set stockText = 'In stock' %}
+        {% set stockType = 'in-stock' %}
+
+        {% if product.stock.track %}
+          {% if not product.stock.available and not product.stock.on_stock %}
+            {% set stockText = 'Out of stock' %}
+            {% set stockType = 'out-of-stock' %}
+          {% elseif product.stock.available and not product.stock.on_stock %}
+            {% set stockText = 'Backorder' %}
+            {% set stockType = 'backorder' %}
+          {% endif %}
+        {% endif %}
+      
+        <div class="cart-item{% if loop.first %} cart-item-first{% endif %}{% if loop.last %} cart-item-last{% endif %}{% if product.bundled %} product-bundled{% endif %}" data-json="{{ (product.url | url) | replace({'.html':'.ajax'}) }}?id={{ product.vid }}"{% if product.discount.price_incl %} data-has-discount="true"{% endif %}>
+          <div class="cart-col cart-col-image">
+            {% if product.is_gift_card == true %}
+            	<img src="{{ product.image }}" alt="">
+            {% else %}
+              <a href="{{ product.url | url }}?id={{ product.vid }}" class="pos-relative d-inline-block gray-overlay">
+                <img src="{{ product.image | url_image(imageThumbSize) }}" alt="">
+              </a>
+            {% endif %}
+          </div>
+          <div class="cart-col cart-col-product">
+            {% if product.bundled %}
+              {% set splittedTitle = product.title | split('+') %}
+              <h4 class="fz-110"><a href="{{ product.url | url }}?id={{ product.vid }}">{{ splittedTitle[0] }}</a></h4>
+            {% elseif product.is_gift_card == true %}
+		            <h4 class="fz-110">{{- product.title -}}</h4>
+            {% else %}
+              <h4 class="fz-110"><a href="{{ product.url | url }}?id={{ product.vid }}">{{ product.fulltitle }}</a></h4>
+            {% endif %}
+            
+              {% if product.variant %}
+            <div>
+                {% for variant in (product.variant | split(',')) %}
+                  <div class="d-inline-block mr-2 fz-080 bordered border lh-1 p-1 button-lined mt-1">{{ variant | trim }}</div>
+                {% endfor %}
+            </div>
+              {% endif %}
+            
+              {% for bundledProduct in (product.bundled) %}
+                {#<div class="d-inline-block mr-2 fz-080 bordered border lh-1 p-1 button-lined mt-1">+ {{ bundledProduct.title }}</div>#}
+            <span class="mr-1 fz-090"><strong>+ {{ bundledProduct.title }}</strong>{% if bundledProduct.variant %} <span class="opacity-70">({{ bundledProduct.variant }})</span>{% endif %}</span>
+              {% endfor %}
+            
+            {% if product.custom %}
+            <div class="custom-holder">
+            	{% for custom in product.custom %}
+              <span class="value"><strong>{{ custom.title }}:</strong> {% for value in custom.values %}{{ value.value }}{% if value.price %} ({{ value.price | money }}){% endif %}{% endfor %}</span>
+            	{% endfor %}
+            </div>
+            {% endif %}
+
+            {% if product.additional_cost and product.additional_cost.base_incl > 0 %}
+            <div class="fz-085 opacity-80 mt-1 cart-item-additional-costs">
+            {{ 'Additional costs' | t }}: {{ product.additional_cost.base_incl | money }} {{ 'per product' | t }}
+            </div>
+            {% endif %}
+
+            {% if product.stock.message %}
+              <div class="c-{{ stockType }} mt-1 fz-090"><i class="icon-check-b"></i> {{ product.stock.message | t }}</div>
+            {% elseif true %} {# if show stock on cart page #}          
+            <div class="c-{{ stockType }} nowrap mt-1 fz-090"><i class="icon-check-b"></i> {{ stockText | t }}</div>
+            {% endif %}
+
+            <div>
+              <a href="{{ ((product.is_gift_card ? 'cart/deleteGiftCardProduct/' : 'cart/delete/') ~ product.qid) | url }}" class="underlined fz-080 opacity-80 mt-2">{{ 'Remove' | t }}</a>
+            </div>
+
+          </div>
+          <div class="cart-col cart-col-qty">
+            {% if product.is_gift_card == true %}
+            <span class="gui-nowrap">{{ product.quantity }}</span>
+            {% else %}
+            <div class="qty qty-small" data-type="single">
+              <input type="number" min="0" name="{{ product.qid }}" class="qty-input qty-fast" value="{{ product.quantity }}">
+              <i class="icon-angle-up qty-button qty-button-up" data-type="up"></i>
+              <i class="icon-angle-down qty-button qty-button-down" data-type="down"></i>
+            </div>
+            {% endif %}
+          </div>
+
+            <div class="cart-col cart-col-price cart-col-price-base d-none d-md-table-cell">
+              {% if vatSwitcherEnabled %}
+              	<span class="price-incl">{{ product.base.price_incl | money }}</span>
+              	<span class="price-excl">{{ product.base.price_excl | money }}</span>
+              {% else %}
+                {{ (shop.b2b ? product.base.price_excl : product.base.price_incl) | money }}
+              {% endif %}
+            </div>
+            <div class="cart-col cart-col-price cart-col-price-total bold{% if loyaltyTotalBasePrice %} cart-price-with-loyalty{% endif %}">
+              {# if loyaltyTotalBasePrice %}
+                <div class="total-items-price-old" style="display:block; font-weight:normal; text-decoration: line-through;">
+                  {% if shop.b2b %}
+                    {{ totalBasePriceExcl | money }}
+                  {% else %}
+                    {{ totalBasePriceIncl | money }}
+                  {% endif %}
+                </div>
+              {% endif #}
+              
+              {% if product.discount.price_incl %}
+              	{% if vatSwitcherEnabled %}
+              		<span class="cart-item-total-discount price-excl">- {{ product.discount.price_excl | money  }}</span>
+              		<span class="cart-item-total-discount price-incl">- {{ product.discount.price_incl | money }}</span>
+              	{% else %}
+              		<span class="cart-item-total-discount">- {{ (shop.b2b ? product.discount.price_excl : product.discount.price_incl) | money }}</span>
+              	{% endif %}
+              {% endif %}
+
+              {% if vatSwitcherEnabled %}
+              	<span class="price-incl">{{ product.price.price_incl | money }}</span>
+              	<span class="price-excl">{{ product.price.price_excl | money }}</span>
+              {% else %}
+                {{ (shop.b2b ? product.price.price_excl : product.price.price_incl) | money }}
+              {% endif %}
+            </div>
+
+        </div>
+      {% endfor %}      
+    </form>
+      
+      <div class="d-flex align-items-center mt-3 justify-content-between">
+        <a href="{{ 'session/back' | url }}" class="opacity-70 hover-underline fz90 pr-4 nowrap">
+          <i class="icon-angle-left fz-080"></i> {{ 'Continue shopping' | t }}
+        </a>
+      {% include 'snippets/payment-icons.rain' with {'classList': 'justify-content-end d-none d-md-flex'} %}
+      </div>
+    </div>
+    
+    <div class="col-lg-4 d-flex flex-column">
+    {% if theme.cart_upsell_block_type == 'custom' and theme.dyapps_addons_enabled %}
+    <div id="cart-upsell-holder" class="pos-relative  mt-4">
+      <h4>{{ theme.cart_upsell_block_title | t }}</h4>
+      
+        <div id="cart-upsells" class="dynamic-products dy-needs-addons content-scroll-overflow custom-scrollbar content-scroll-overflow-medium mt-2" data-products-url="{{ (theme.cart_upsell_block_custom_url | t) | url }}?request_type=ajax&amp;request_action=collection&amp;mode=cart_upsell&amp;limit=12&amp;exclude={{ cartProductIds | join(',') }}">
+        <div class="mt-3 w-100 p-3">
+          <div class="loader-icon loader-icon-small"></div>
+        </div>
+        </div>
+      
+    </div>
+    {% elseif cart.upsells or cart.related %}
+    <div id="cart-upsell-holder" class="pos-relative  mt-4">
+      <h4>{{ cart.upsells.title ?: 'You might also like' | t }}</h4>
+      <div id="cart-upsells" class="content-scroll-overflow content-scroll-overflow-medium custom-scrollbar mt-2">
+        	
+          	{% include 'snippets/products.rain' with {products: (cart.upsells.products ?: cart.related), 'mode': 'cart_upsell', 'limit': 8, 'exclude': cartProductIds} %}
+        
+      </div>
+    </div>
+    {% endif %}
+      
+          
+          <div id="cart-totals" class="grey-block rounded mt-4 order-first order-md-0">
+            
+            <table id="cart-prices" class="w-100">
+              {% if loyaltyActive %}
+              <tr>
+                <td>
+                  <strong class="fz-110">{{ 'Discount' | t }}</strong> <a href="{{ 'cart/detachReward' | url }}" class="underlined fz-080 opacity-70">{{ 'Remove' | t }}</a><br>
+                  <div class="fz-090">
+                  	{{ 'Reward:' | t }} {{ cart.loyalty_reward.reward_title }}<br>
+                  </div>
+                </td>
+                <td class="text-right">
+                  <strong>- {{ cart.loyalty_reward.reward_amount | money }}</strong>
+                </td>
+              </tr>
+              	<tr>
+                  <td colspan="2"><hr></td>
+                </tr>
+              {% endif %}
+              
+            {% if cart.omni_gift_card.is_active and cart.omni_gift_card.cards %}
+            <div class="" style="">
+              <div style=""><strong>{{ 'Gift card' | t }}</strong></div>
+            	{% for giftcard in cart.omni_gift_card.cards %}
+            	<div style="display:flex; margin-bottom:10px;">
+								<span class="" style="flex-grow:1;">
+                  {{ giftcard.code }}&nbsp;-&nbsp;<a href="{{ ('/cart/deleteGiftCard/' ~ giftcard.uuid) | url }}" class="underlined fz-090" title="{{ 'Delete' | t }}">{{ 'Delete' | t }}</a>
+                </span>
+                  <span class="highlight-bg p-1 br-4 lh-1 nowrap">
+                    -<strong>{{ giftcard.usage_incl | money }}</strong> {% if false %}{{ 'Incl. VAT' | t }}{% endif %}
+                  </span>
+            	</div>
+            	{% endfor %}
+            </div>
+            {% endif %}
+              
+              {% if cart.shipment %}
+              <tr>
+                <td class="pb-2">
+                  <strong>{{ 'Shipping costs' | t }}</strong><br>
+                  {{ cart.shipment.title }} <a href="{{ 'cart/unsetShipmentMethod' | url }}" class="delete-shipping-method underlined fz-090" title="{{ 'Delete' | t }}">{{ 'Delete' | t }}</a>
+                </td>
+                <td class="text-right pb-2 bold">{{ (shop.b2b ? cart.shipment.price.price_excl : cart.shipment.price.price_incl) | money }}</td>
+              </tr>
+              {% endif %} {# end shipment #}
+              
+              {% if cart.discount %}
+              <tr>
+                <td class="pb-2">
+                  <strong>{{ 'Discount' | t }}</strong><br>
+                  {{ cart.discount.code }} <a href="{{ 'cart/unsetDiscount' | url }}" class="delete-shipping-method underlined fz-090" title="{{ 'Delete' | t }}">{{ 'Delete' | t }}</a>
+                </td>
+                {% if vatSwitcherEnabled %}
+                <td class="text-right pb-2 bold price-incl"><span class="highlight-bg p-1 br-4 lh-1 nowrap">- {{ cart.discount.price.price_incl | money }}</span></td>
+                <td class="text-right pb-2 bold price-excl"><span class="highlight-bg p-1-br-4 lh-1 nowrap">- {{ cart.discount.price.price_excl | money }}</span></td>
+                {% else %}
+                <td class="text-right pb-2 bold"><span class="highlight-bg py-1 px-2 br-2 lh-1 nowrap">- {{ (shop.b2b ? cart.discount.price.price_excl : cart.discount.price.price_incl) | money }}</span></td>
+                {% endif %}
+              </tr>
+              {% endif %} {# end shipment #}
+              
+              	{% if shop.settings.checkout.cart_tax %}
+                  <tr class="">
+                    <td class="bold">{{ 'Subtotal excl. VAT' | t }}</td>
+                    <td class="text-right bold">{{ cart.totals.sub_total | money }}</td>
+                  </tr>
+                  {% for tax in cart.totals.taxes %}
+                  <tr>
+                    <td class="pb-2">{{ tax.name | upper }} ({{ tax.percentage * 100 }}%)</td>
+                    <td class="text-right pb-2">{{ tax.amount | money }}</td>
+                  </tr>
+                  {% endfor %}
+              	{% endif %} {# end tax #}
+              
+              	{% if vatSwitcherEnabled %}
+								<tr class="price-excl bold fz-130">
+                	<td class="pb-1">{{ 'Total excl. VAT' | t }}</td>
+                	<td class="text-right pb-1">{{ (cart.totals.sub_total - cart.totals.giftcard_total.excl) | money }}</td>
+                </tr>
+              	<tr class="price-incl bold fz-130">
+                	<td class="pb-1">{{ 'Total incl. VAT' | t }}</td>
+                	<td class="text-right pb-1">{{ (cart.totals.grand_total - cart.totals.giftcard_total.incl) | money }}</td>
+                </tr>
+              	{% else %}
+                <tr class="bold fz-130">
+                  <td class="pb-1">{{ (shop.b2b ? 'Total excl. VAT' : 'Total incl. VAT') | t }}</td>
+                  <td class="text-right pb-1">{{ (shop.b2b ? (cart.totals.sub_total - cart.totals.giftcard_total.excl) : (cart.totals.grand_total - cart.totals.giftcard_total.incl)) | money }}</td>
+                </tr>
+              	{% endif %}
+              
+              
+            </table>
+            
+            {% if theme.enable_free_shipping_notice %}
+              {% include 'snippets/freeshipping-bar.rain' with {'type':'cart', 'classList': 'mt-3'} %}
+            {% endif %}
+            
+            <a href="{{ 'checkout' | url }}" class="button button-large button-cta full-width mt-3 with-icon">
+              {{ 'Proceed to checkout' | t }} <i class="icon-arrow-right"></i>
+            </a>
+            
+            {% if loyaltyEnabled %}
+              <div class="mt-3"  id="loyalty-points-to-be-earned">
+                {{ 'Points to be earned' | t }}: <strong class="points"><i class="icon-loader-rect"></i></strong>
+              </div>
+              <script>
+                
+                (function() {
+                  $.getJSON('{{ ('services/pointsToBeEarned?total=' ~ (shop.b2b ? cart.totals.sub_total : cart.totals.grand_total) ~ '&payment=' ~ (shop.b2b ? cart.payment.price.price_excl : cart.payment.price.price_incl) ~ '&shipment=' ~ (shop.b2b ? cart.shipment.price.price_excl : cart.shipment.price.price_incl) ~ '&orderId=' ~ 0) | url | raw }}', function (response) {
+                    if(response.display) {
+                      $('#loyalty-points-to-be-earned').removeClass('hidden').find('.points').text(response.points);
+                    }
+                  });
+                })();
+              </script>
+            {% endif %}
+            
+          </div>
+          
+          {% include 'snippets/payment-icons.rain' with {'classList': 'd-md-none mt-2'} %}
+          
+          {% if loyaltyEnabled %}          
+          	{% include 'snippets/cart-loyalty-widget.rain' %}
+          {% endif %}
+          
+          {% if shop.settings.checkout.coupons %}  
+          <div class="toggle-title mt-3 pb-3 {% if shop.settings.checkout.calculate_shipping or cart.omni_gift_card.is_active or isDemoShop %}gray-border-bottom{% endif %}">
+            {{ 'Discount code' | t }}
+          </div>
+          <form id="gui-form-discount" class="toggle-content" action="{{ 'cart/setDiscount' | url }}" method="post">            
+            <div class="d-flex p-3 gray-bg">
+            		<input class="flex-grow-1 theme-input body-bg mr-2" type="text" name="code" placeholder="{{ 'Discount code' | t }}">
+              	<button type="submit" class="button button-small" onclick="guiCartUpdate($('#gui-form-discount'))" href="javascript:;">{{ 'Apply' | t }}</button>
+              </div>
+          </form>
+          {% endif %}
+          
+          {% if cart.omni_gift_card.is_active or isDemoShop %}
+          <div class="toggle-title mt-3 pb-3 {% if shop.settings.checkout.calculate_shipping %}gray-border-bottom{% endif %}">
+            {{ 'Gift card' | t }}
+          </div>
+          <form id="gui-form-gift-card" class="toggle-content" action="{{ 'cart/setGiftCard' | url }}" method="post">            
+            <div class="p-3 gray-bg">
+            	<div class="d-flex">
+            		<input class="flex-grow-1 theme-input body-bg mr-2" type="text" name="code" placeholder="{{ 'Enter gift card code' | t }}">
+              	<button type="submit" class="button button-small" onclick="guiCartUpdate($('#gui-form-gift-card'))" href="javascript:;">{{ 'Apply' | t }}</button>
+              </div>
+              <div class="gui-div-giftcard-check-balance">
+                <div class="giftcard-check-balance">
+                  <span class="fa fa-info-circle" style="margin-right:5px;"></span>
+                  <a id="giftcard-modal-open">{{'Check gift card balance' | t}}</a>
+                </div>
+              </div>
+            </div>
+          </form>
+          {% endif %}
+          
+          {% if shop.settings.checkout.calculate_shipping %}
+          <div class="toggle-title mt-3 pb-3" data-trigger-fancy="fancy-shippingcosts">
+            {{ 'Calculate shipping costs' | t }}
+          </div>
+          
+          {% endif %}
+        </div>
+
+    
+    {% endif %}
+  </div>
+  
+  {% if cart.related and cart.upsells.products %}
+  <h2 class="margin-top-double">{{ 'Related products' | t }}</h2>
+  
+  <div id="cart-bottom-grid" class="row static-products-holder">    
+    {% include 'snippets/products.rain' with {'products': cart.related, 'mode': 'grid', 'col_width': '3', 'limit': 4} %}
+  </div>
+  {% endif %}
+  
+</div>
+
+{% if cart.omni_gift_card.is_active or isDemoShop %}
+<style>
+  #giftcard-modal-wrapper
+  {
+    top: 10%;
+    position:fixed !important;
+    z-index: 99999 !important;
+  }
+</style>
+<script src="{{ 'jquery.validate.min.js' | url_core }}"></script>
+{% include 'blocks/giftcard-check-modal.rain' %}
+{% endif %}

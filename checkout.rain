@@ -134,7 +134,10 @@
               {% if shop.b2b %}
                 {{ product.price_excl | money }}
               {% else %}
-                {{ product.price_incl | money }}
+                <div class="total-items-price-old" style="display:block; font-weight:normal; text-decoration: line-through;">
+                    {{ totalBasePriceIncl | money }}
+                </div>
+                    {{ product.price_incl | money }}
               {% endif %}
             </div>
 
