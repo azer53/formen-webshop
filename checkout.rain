@@ -1,0 +1,170 @@
+{% set stepTitles = {
+	'details': 'Your details',
+	'shipping': 'Shipping address',
+	'shipment': 'Shipping method',
+	'payment': 'Payment method',
+	'review': 'Review your order',
+	'thankyou': 'Thank you',
+} %}
+
+<div id="submit-order-block" class="mt-4">
+  
+  <h3>{{ 'Review your order' | t }}</h3>
+  
+  <textarea id="gui-form-comment" name="comment" placeholder="{{ 'Remark' | t }}" style="width:100%; height:100px;" class="mt-1 theme-input">{{ checkout.comment }}</textarea>
+  
+  <div class="d-flex mt-3">
+  <input id="theme-gui-form-newsletter" class="gui-validate fancy-checkbox" type="checkbox" name="newsletter" value="1"{% if checkout.newsletter %} checked="checked"{% endif %}>
+  <label for="theme-gui-form-newsletter">{{ 'Subscribe to our newsletter' | t }}</label>
+  </div>
+  
+  <div class="d-flex mt-3">
+  <input id="theme-gui-form-terms" class="gui-validate fancy-checkbox" type="checkbox" name="terms" value="1"{% if checkout.terms %} checked="checked"{% endif %}>
+  <label for="theme-gui-form-terms">{{ 'By clicking "buy" I place an order with an obligation to pay and I accept the $1.' | t('<a href="javascript:;" onclick="gui_popover(\'#gui-popover-terms-and-conditions\');return false;">'~('General terms & conditions' | t | lower )~'</a>') | raw }}</label>
+  </div>
+</div>
+
+{% if checkout.theme == 'default' or checkout.theme == 'onepage' %}
+  {% include 'snippets/checkout-header.rain' with {'type': 'default'} %}
+
+	{% if checkout.theme == 'default' %} {# and step == 'review' #}
+  <div class="container mt-4 container-checkout-default">    
+		<div class="checkout-content pb-4">
+    	<h1 class="mb-3 text-center">{{ (stepTitles[step] ?: 'Checkout') | t }}</h1>
+    	{% include template %}
+    	{% include 'snippets/checkout-footer.rain' with{ 'type': 'default' } %}
+    </div>
+	</div>
+	{% else %}
+  <div class="container flex-grow-1 d-flex flex-column">
+      <div class="row flex-grow-1">
+        <div class="{% if checkout.theme == 'onepage' %}col-12 col-md-6 col-lg-7 d-flex mt-4{% else %}col-7 d-flex mt-4{% endif %}">
+          <div class="checkout-content pb-4">
+            
+            <h1 class="mb-3">{{ (stepTitles[step] ?: 'Checkout') | t }}</h1>
+            
+  				{% include template %}
+            
+						{% include 'snippets/checkout-footer.rain' with{ 'type': 'default' } %}
+          </div>
+        </div>
+        
+        <div class="{% if checkout.theme == 'onepage' %}d-none d-md-block col-12 col-md-6 col-lg-5{% else %}col-5 p-0m-0{% endif %}">
+      <div id="checkout-cart-items" class="py-5 pl-3 pl-lg-5 h-100">
+        <div id="checkout-cart-content">
+          
+          <h4 class="fw-normal mb-3">{{ 'Items in your shopping cart' | t }}</h4>
+          
+          <div id="cart-form">
+      {% for product in checkout.quote.products %}
+     
+      	{% set totalBasePriceIncl = (product.base_price_incl | round(2) * product.quantity) %}
+      	{% set totalBasePriceExcl = (product.base_price_excl | round(2) * product.quantity) %}
+      	{% set loyaltyTotalBasePrice = (totalBasePriceIncl > product.price_incl and loyaltyActive) %}
+      
+        {% set stockText = 'In stock' %}
+        {% set stockType = 'in-stock' %}
+
+        {% if product.stock.track %}
+          {% if not product.stock.available and not product.stock.on_stock %}
+            {% set stockText = 'Out of stock' %}
+            {% set stockType = 'out-of-stock' %}
+          {% elseif product.stock.available and not product.stock.on_stock %}
+            {% set stockText = 'Backorder' %}
+            {% set stockType = 'backorder' %}
+          {% endif %}
+        {% endif %}
+      
+        <div class="cart-item{% if loop.first %} cart-item-first{% endif %}{% if loop.last %} cart-item-last{% endif %}">
+          <div class="cart-col cart-col-image">
+          <a href="{{ product.url | url }}?id={{ product.vid }}" class="pos-relative d-inline-block gray-overlay">
+            <img src="{{ product.image_id | url_image(imageThumbSize) }}" alt="">
+            <span class="checkout-item-qty-circle">{{ product.quantity }}</span>
+          </a>
+          </div>
+          <div class="cart-col cart-col-product">
+            {% if product.bundled %}
+              {% set splittedTitle = product.title | split('+') %}
+              <h4 class="fz-110"><a href="{{ product.url | url }}?id={{ product.vid }}">{{ splittedTitle[0] }}</a></h4>
+            {% else %}
+              <h4 class="fz-110">
+<!--                 <span class="fz-090" style="font-weight:400;">{{ product.quantity }}x</span> -->
+                <a href="{{ product.url | url }}?id={{ product.vid }}">{{ product.fulltitle }}</a>
+            	</h4>
+            {% endif %}
+            {% if product.variant %}
+              {% for variant in (product.variant | split(',')) %}
+                <div class="d-inline-block mr-2 fz-080 bordered border lh-1 p-1 button-lined mt-1">{{ variant | trim }}</div>
+              {% endfor %}
+            {% endif %}
+            
+            {% if product.custom_data %}
+            <div class="custom-holder fz-085 mt-2">
+            	{% for custom in product.custom_data %}
+              <span class="value"><strong>{{ custom.title }}:</strong> {% for value in custom.values %}{{ value.value }}{% endfor %}</span><br>
+            	{% endfor %}
+            </div>
+            {% endif %}
+
+            {% if product.additional_cost and product.additional_cost.base_incl > 0 %}
+            <div class="fz-085 opacity-80 mt-1 cart-item-additional-costs">
+            {{ 'Additional costs' | t }}: {{ product.additional_cost_base_incl | money }} {{ 'per product' | t }}
+            </div>
+            {% endif %}
+
+            {% if product.stock_message %}
+              <div class="c-{{ stockType }} nowrap mt-1 fz-090"><i class="icon-check-b"></i> {{ product.stock_message | t }}</div>
+            {% elseif true %} {# if show stock on cart page #}          
+            <div class="c-{{ stockType }} nowrap mt-1 fz-090"><i class="icon-check-b"></i> {{ stockText | t }}</div>
+            {% endif %}
+
+          </div>
+
+            <div class="cart-col cart-col-price cart-col-price-total bold{% if loyaltyTotalBasePrice %} cart-price-with-loyalty{% endif %}">
+              {% if loyaltyTotalBasePrice %}
+                <div class="total-items-price-old" style="display:block; font-weight:normal; text-decoration: line-through;">
+                  {% if shop.b2b %}
+                    {{ totalBasePriceExcl | money }}
+                  {% else %}
+                    {{ totalBasePriceIncl | money }}
+                  {% endif %}
+                </div>
+              {% endif %}
+
+              {% if shop.b2b %}
+                {{ product.price_excl | money }}
+              {% else %}
+                {{ product.price_incl | money }}
+              {% endif %}
+            </div>
+
+        </div>
+      {% endfor %}
+          </div>
+          
+          <div id="checkout-total-sum" class="gui-cart-sum mt-4">
+            
+          </div>
+          
+          <a href="javascript:;" id="checkout-confirm-button" class="checkout-buy-button button button-cta button-large w-100" onclick="$('#gui-form').submit();">
+            {{ 'Buy' | t }}
+          </a>
+          
+        </div>
+          </div>
+          
+        </div>
+      </div>
+  </div>
+	{% endif %}
+{% elseif true %}
+  {% include 'snippets/checkout-header.rain' %}
+
+  <div class="container">
+    <div class="dy-checkout mt-3">
+  		{% include template %}
+    </div>
+  </div>
+
+	{% include 'snippets/checkout-footer.rain' %}
+{% endif %}
