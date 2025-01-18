@@ -11,6 +11,8 @@ body{ padding-top:0 !important; }
 .page-checkout .gui-payment-method.gui-is-selected .gui-payment-method-form
 {
     display: flex;
+    /* Mollie component fix Eli */
+    display: flex !important;
 }
 
 #checkout-header
